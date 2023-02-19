@@ -1,5 +1,8 @@
+import 'package:budget_tracker/view_models/budget_view_model.dart';
+import 'package:budget_tracker/services/theme_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../pages/home_page.dart';
 import '../pages/profile_page.dart';
@@ -32,26 +35,36 @@ class _HomeState extends State<Home> {
 
   @override
   Widget build(BuildContext context) {
+    final themeService = Provider.of<ThemeService>(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Budget Tracker'),
+        leading: IconButton(
+            onPressed: () {
+              themeService.darkTheme = !themeService.darkTheme;
+            },
+            icon: Icon(
+                themeService.darkTheme ? Icons.light_mode : Icons.dark_mode)),
         actions: [
           IconButton(
-            onPressed: () {},
-            icon: IconButton(
-              icon: const Icon(Icons.attach_money),
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) {
-                    return AddBudgetDialog(
-                      budgetToAdd: (budget) {},
-                    );
-                  },
-                );
-              },
-            ),
-          )
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) {
+                  return AddBudgetDialog(
+                    budgetToAdd: (budget) {
+                      final budgetService = Provider.of<BudgetViewModel>(
+                        context,
+                        listen: false,
+                      );
+                      budgetService.budget = budget;
+                    },
+                  );
+                },
+              );
+            },
+            icon: Icon(Icons.attach_money),
+          ),
         ],
       ),
       body: pages[_currentPageIndex],

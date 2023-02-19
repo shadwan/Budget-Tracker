@@ -1,7 +1,9 @@
 import 'package:budget_tracker/model/transaction_item.dart';
+import 'package:budget_tracker/view_models/budget_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
+import 'package:provider/provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -11,11 +13,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<TransactionItem> items = [];
-
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
+
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -23,9 +24,11 @@ class _HomePageState extends State<HomePage> {
             context: context,
             builder: (context) => AddTransactionDialog(
               itemToAdd: (transactionItem) {
-                setState(() {
-                  items.add(transactionItem);
-                });
+                final budgetViewModel = Provider.of<BudgetViewModel>(
+                  context,
+                  listen: false,
+                );
+                budgetViewModel.saveTransactionItem(transactionItem);
               },
             ),
           );
@@ -44,27 +47,45 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Align(
                   alignment: Alignment.topCenter,
-                  child: CircularPercentIndicator(
-                    radius: screenSize.width / 3,
-                    lineWidth: 10.0,
-                    percent: .5,
-                    backgroundColor: Colors.white,
-                    center: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text(
-                          "\$0",
-                          style: TextStyle(
-                              fontSize: 48, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          "Balance",
-                          style: TextStyle(fontSize: 18),
-                        ),
-                      ],
-                    ),
-                    progressColor: Theme.of(context).colorScheme.primary,
-                  ),
+                  child: Consumer<BudgetViewModel>(
+                      builder: (context, value, child) {
+                    final balance = value.getBalance();
+                    final budget = value.getBudget();
+
+                    double percentage = balance / budget;
+
+                    if (percentage < 0) {
+                      percentage = 0;
+                    }
+                    if (percentage > 1) {
+                      percentage = 1;
+                    }
+
+                    return CircularPercentIndicator(
+                      radius: screenSize.width / 3,
+                      lineWidth: 10.0,
+                      percent: percentage,
+                      backgroundColor: Colors.white,
+                      center: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "\$${balance.toString().split(".")[0]}",
+                            style: const TextStyle(
+                                fontSize: 48, fontWeight: FontWeight.bold),
+                          ),
+                          const Text(
+                            "Balance",
+                            style: TextStyle(fontSize: 18),
+                          ),
+                          Text(
+                            "Budget: \$${budget}",
+                          ),
+                        ],
+                      ),
+                      progressColor: Theme.of(context).colorScheme.primary,
+                    );
+                  }),
                 ),
                 const SizedBox(
                   height: 35,
@@ -76,8 +97,15 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(
                   height: 10,
                 ),
-                ...List.generate(items.length,
-                    (index) => TransactionCard(item: items[index])),
+                Consumer<BudgetViewModel>(builder: (context, value, child) {
+                  return ListView.builder(
+                    itemBuilder: (context, index) {
+                      return TransactionCard(item: value.items[index]);
+                    },
+                    itemCount: value.items.length,
+                    shrinkWrap: true,
+                  );
+                }),
               ],
             ),
           ),
@@ -97,39 +125,67 @@ class TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 5.0, top: 5.0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.background,
-          borderRadius: BorderRadius.circular(15.0),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 50,
-              offset: const Offset(0, 25), // changes position of shadow
+    return GestureDetector(
+        onTap: (() => showDialog(
+            context: context,
+            builder: (context) {
+              return Dialog(
+                child: Padding(
+                  padding: const EdgeInsets.all(15.0),
+                  child: Row(children: [
+                    const Text("Delete item"),
+                    const Spacer(),
+                    TextButton(
+                        onPressed: () {
+                          final budgetViewModel = Provider.of<BudgetViewModel>(
+                              context,
+                              listen: false);
+                          budgetViewModel.deleteItem(item);
+                          Navigator.pop(context);
+                        },
+                        child: const Text("Yes")),
+                    TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        child: const Text("No"))
+                  ]),
+                ),
+              );
+            })),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 5.0, top: 5.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.background,
+              borderRadius: BorderRadius.circular(15.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 50,
+                  offset: const Offset(0, 25), // changes position of shadow
+                ),
+              ],
             ),
-          ],
-        ),
-        padding: const EdgeInsets.all(15.0),
-        width: MediaQuery.of(context).size.width,
-        child: Row(
-          children: [
-            Text(
-              item.itemTitle,
-              style: const TextStyle(
-                fontSize: 18,
-              ),
+            padding: const EdgeInsets.all(15.0),
+            width: MediaQuery.of(context).size.width,
+            child: Row(
+              children: [
+                Text(
+                  item.itemTitle,
+                  style: const TextStyle(
+                    fontSize: 18,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  "${!item.isExpense ? "+" : "-"}\$${item.amount.toStringAsFixed(2)}",
+                  style: const TextStyle(fontSize: 16),
+                )
+              ],
             ),
-            const Spacer(),
-            Text(
-              "${!item.isExpense ? "+" : "-"}\$${item.amount.toStringAsFixed(2)}",
-              style: const TextStyle(fontSize: 16),
-            )
-          ],
-        ),
-      ),
-    );
+          ),
+        ));
   }
 }
 
